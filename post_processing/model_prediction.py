@@ -17,8 +17,8 @@ current_job_id = os.environ.get("SLURM_JOB_ID", "no_jobid")
 parser = argparse.ArgumentParser()
 parser.add_argument('-p','--parent_folder')
 parser.add_argument('-w','--weight_file', default = 'model_best.weights.h5')
-parser.add_argument('-i','--input_file', default = 'input128x128_pred_cases.h5')
-parser.add_argument('-o','--output_file', default = 'output128x128_pred_cases.h5')
+parser.add_argument('-i','--input_file', default = 'input128x128_pred.h5')
+parser.add_argument('-o','--output_file', default = 'output128x128_pred.h5')
 parser.add_argument('-d','--dataset') #Supply folder name up to the seed
 args = parser.parse_args()
 
