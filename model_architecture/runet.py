@@ -62,9 +62,9 @@ class ReflectionPadding2D(Layer):
         config.update({'padding': self.padding})
         return config
 
-
+ 
 def create_vae(reg_weight, input_size=(128, 128, 2), output_channels=1):
-    # Encoder
+
     inputs = Input(shape = input_size, name = 'image')
 
     enc1_conv = Conv2D(16, (3, 3), strides = (2,2), padding='same', kernel_regularizer=regularizers.l2(reg_weight))(inputs)
