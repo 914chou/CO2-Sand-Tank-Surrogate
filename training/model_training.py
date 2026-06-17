@@ -83,37 +83,45 @@ results_folder.mkdir(parents=True, exist_ok=True)
 dataset_path = project_path / 'training_validation_prediction_data'/ f'seed_{args.dataset_seed}'
 
 
-with h5py.File(dataset_path / 'input128x128_train_cases.h5'  , 'r') as f:
+with h5py.File(dataset_path / 'input128x128_train.h5'  , 'r') as f:
     X_train = f['input_data'][:]
 
-with h5py.File(dataset_path / 'output128x128_train_cases.h5', 'r') as f:
+with h5py.File(dataset_path / 'output128x128_train.h5', 'r') as f:
     Y_train = f['output_data'][:]
 
-with h5py.File(dataset_path / 'input128x128_val_cases.h5'  , 'r') as f:
+with h5py.File(dataset_path / 'input128x128_val.h5'  , 'r') as f:
+    X_val = f['input_data'][:]
+
+with h5py.File(dataset_path / 'output128x128_val.h5', 'r') as f:
+    Y_val = f['output_data'][:]
+
+with h5py.File(dataset_path / 'input128x128_pred.h5', 'r') as f:
     X_test = f['input_data'][:]
 
-with h5py.File(dataset_path / 'output128x128_val_cases.h5', 'r') as f:
+with h5py.File(dataset_path / 'output128x128_pred.h5', 'r') as f:
     Y_test = f['output_data'][:]
 
 
 # Shuffle the validation dataset once
 # Get the total number of validation samples
-num_test_samples = X_test.shape[0]
+num_val_samples = X_val.shape[0]
 
 # Generate a random permutation of indices
 np.random.seed(seed_for_shuffling)
-indices = np.random.permutation(num_test_samples)
+indices = np.random.permutation(num_val_samples)
 
 # Shuffle both arrays using the same indices
-X_test_shuffled = X_test[indices]
-Y_test_shuffled = Y_test[indices]
+X_val_shuffled = X_val[indices]
+Y_val_shuffled = Y_val[indices]
 
 with tf.device('/CPU:0'):
     train_dataset = tf.data.Dataset.from_tensor_slices((X_train,Y_train))
-    val_dataset = tf.data.Dataset.from_tensor_slices((X_test_shuffled,Y_test_shuffled))
+    val_dataset = tf.data.Dataset.from_tensor_slices((X_val_shuffled,Y_val_shuffled))
+    test_dataset = tf.data.Dataset.from_tensor_slices((X_test, Y_test))
 
 train_dataset = train_dataset.shuffle(buffer_size=len(X_train)).batch(global_batch_size).prefetch(tf.data.AUTOTUNE)
 val_dataset = val_dataset.batch(global_batch_size).prefetch(tf.data.AUTOTUNE)
+test_dataset = test_dataset.batch(global_batch_size).prefetch(tf.data.AUTOTUNE)
 
 input_shape = X_train[0].shape
 output_shape = Y_train[0].shape
@@ -171,6 +179,22 @@ def normalized_mse(y_true, y_pred):
     nmse_per_sample_tensor = numerator / denominator 
     return nmse_per_sample_tensor
 
+#####################################
+# define test set evaulation callback
+#####################################
+class test_data_evaluation(tf.keras.callbacks.Callback):
+    def __init__(self, test_dataset):
+        super().__init__()
+        self.test_dataset = test_dataset
+
+    def on_epoch_end(self, epoch, logs=None):
+        
+        if logs is None:
+            logs = {}
+
+        results = self.model.evaluate(test_dataset, verbose=0, return_dict=True)
+        logs["test_loss"] = results["loss"]
+
 #########################
 # Training 
 #########################
@@ -197,21 +221,24 @@ with strategy.scope():
     save_weights_only = True   
     )
 
+    callback2_test_eval = test_data_evaluation(test_dataset)
+
 # training
 print("Loop 0:") 
 history = vae_model.fit(
     train_dataset,
     epochs = epochs, 
-    callbacks = [callback1_checkpoint],
+    callbacks = [callback1_checkpoint, callback2_test_eval],
     validation_data = val_dataset,
     verbose = 2,
 )
 
 train_loss = np.array(history.history['loss'])
 val_loss = np.array(history.history['val_loss'])
+test_loss = np.array(history.history['test_loss'])
 epochs_ran = history.epoch[-1] + 1 #+1 b/c epoch is zero indexing
 filename = results_folder / 'history000.mat'
-data = {'train_loss': train_loss, 'val_loss': val_loss, 'epochs_ran': epochs_ran}
+data = {'train_loss': train_loss, 'val_loss': val_loss, 'test_loss':test_loss, 'epochs_ran': epochs_ran}
 savemat(filename, data)
 
 current_lr = target_lr
@@ -233,16 +260,17 @@ for i in range(1,epoch_loop_num):
     history = vae_model.fit(
         train_dataset,
         epochs = epochs, 
-        callbacks = [callback1_checkpoint],
+        callbacks = [callback1_checkpoint, callback2_test_eval],
         validation_data = val_dataset,
         verbose = 2,
     )
 
     train_loss = np.array(history.history['loss'])
     val_loss = np.array(history.history['val_loss'])
+    test_loss = np.array(history.history['test_loss'])
     epochs_ran = history.epoch[-1] + 1 #+1 b/c epoch is zero indexing
     filename = results_folder / f'history{i}00.mat'
-    data = {'train_loss': train_loss, 'val_loss': val_loss, 'epochs_ran': epochs_ran}
+    data = {'train_loss': train_loss, 'val_loss': val_loss, 'test_loss': test_loss, 'epochs_ran': epochs_ran}
     savemat(filename, data)
 
 end2 = time.time()
