@@ -1,2 +1,2 @@
 # CO2-Sand-Tank-Surrogate
-The article corresponding to this repo can be found at: ______________.
+The DOI of the article corresponding to this repo is 10.1016/j.ijggc.2026.104765
